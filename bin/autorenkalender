@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+from typing import Optional, Generator
+from datetime import date, datetime
+from collections import namedtuple
+import re
+
+import requests
+
+AUTORENKALENDER_URL = "https://www.projekt-gutenberg.org/info/kalender/autoren.js"
+
+AUTHOR_URL_BASE = "https://www.projekt-gutenberg.org/autoren/namen/"
+
+AUTHOR_REGEX = re.compile(r"^Autor\(")
+LINE_REGEX = re.compile(
+    r'^Autor\("'
+    r'(?P<last_name>.*)",'
+    r'"(?P<first_name>.*)",'
+    r'"(?P<birth_string>\d{8})",'
+    r'"(?P<death_string>\d{8})",'
+    r'"(?P<url>.*html)"\);$'
+)
+
+
+Author = namedtuple("Author", ["last_name", "first_name", "birth", "death", "url"])
+
+
+def parse_date(string: str) -> Optional[date]:
+    try:
+        return datetime.strptime(string, "%Y%m%d").date()
+    except ValueError:
+        return None
+
+
+def same_day(left: date, right: date) -> bool:
+    return left.day == right.day and left.month == right.month
+
+
+def parse_author(line: str) -> Optional[Author]:
+    match = LINE_REGEX.match(line)
+    if match:
+        birth_string = match.group("birth_string")
+        death_string = match.group("death_string")
+        return Author(
+            last_name=match.group("last_name"),
+            first_name=match.group("first_name"),
+            birth=parse_date(birth_string),
+            death=parse_date(death_string),
+            url=AUTHOR_URL_BASE + match.group("url"),
+        )
+    return None
+
+
+def even_years_alive(author) -> Optional[int]:
+    today = date.today()
+    if author.birth and same_day(author.birth, today):
+        return today.year - author.birth.year
+    return None
+
+
+def even_years_dead(author) -> Optional[int]:
+    today = date.today()
+    if author.death and same_day(author.death, today):
+        return today.year - author.death.year
+    return None
+
+
+def print_info(author) -> None:
+    years_alive = even_years_alive(author)
+    years_dead = even_years_dead(author)
+
+    if years_alive or years_dead:
+        print(
+            "[{name}]({url}]".format(
+                name=author.first_name.strip() + " " + author.last_name.strip(),
+                url=author.url,
+            )
+        )
+        if years_alive:
+            print("{}. Geburtstag".format(years_alive))
+        if years_dead:
+            print("{}. Todestag".format(years_dead))
+        print()
+
+
+def author_lines() -> Generator[str, None, None]:
+    """Returns the text of the Autorenkalender JavaScript file"""
+    response = requests.get(AUTORENKALENDER_URL)
+    if response.status_code == 200:
+        for line in response.text.splitlines():
+            if AUTHOR_REGEX.search(line):
+                yield line
+
+
+if __name__ == "__main__":
+    for author_line in author_lines():
+        author = parse_author(author_line)
+        if author:
+            print_info(author)
