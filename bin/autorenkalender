@@ -70,7 +70,7 @@ def print_info(author) -> None:
 
     if years_alive or years_dead:
         print(
-            "[{name}]({url}]".format(
+            "[{name}]({url})".format(
                 name=author.first_name.strip() + " " + author.last_name.strip(),
                 url=author.url,
             )
