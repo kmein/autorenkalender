@@ -10,6 +10,7 @@ AUTORENKALENDER_URL = "https://www.projekt-gutenberg.org/info/kalender/autoren.j
 
 AUTHOR_URL_BASE = "https://www.projekt-gutenberg.org/autoren/namen/"
 
+CAMEL_CASE_REGEX = re.compile(r"(?<!^)(?=[A-Z])")
 AUTHOR_REGEX = re.compile(r"^Autor\(")
 LINE_REGEX = re.compile(
     r'^Autor\("'
@@ -22,6 +23,10 @@ LINE_REGEX = re.compile(
 
 
 Author = namedtuple("Author", ["last_name", "first_name", "birth", "death", "url"])
+
+
+def hyphen_name(name: str) -> str:
+    return " ".join(CAMEL_CASE_REGEX.sub("-", word) for word in name.split())
 
 
 def parse_date(string: str) -> Optional[date]:
@@ -40,9 +45,11 @@ def parse_author(line: str) -> Optional[Author]:
     if match:
         birth_string = match.group("birth_string")
         death_string = match.group("death_string")
+        last_name = match.group("last_name")
+        first_name = match.group("first_name")
         return Author(
-            last_name=match.group("last_name"),
-            first_name=match.group("first_name"),
+            last_name=hyphen_name(last_name),
+            first_name=hyphen_name(first_name),
             birth=parse_date(birth_string),
             death=parse_date(death_string),
             url=AUTHOR_URL_BASE + match.group("url"),
@@ -71,7 +78,9 @@ def print_info(author) -> None:
     if years_alive or years_dead:
         print(
             "[{name}]({url})".format(
-                name=author.first_name.strip() + " " + author.last_name.strip(),
+                name=(
+                    author.first_name.strip() + " " + author.last_name.strip()
+                ).strip(),
                 url=author.url,
             )
         )
